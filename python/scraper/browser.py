@@ -42,9 +42,11 @@ async def create_context(browser: Browser) -> BrowserContext:
     Returns:
         BrowserContext 인스턴스
     """
+    user_agent_string = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    
     context = await browser.new_context(
-        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        viewport={'width': 1920, 'height': 1080'},
+        user_agent=user_agent_string,
+        viewport={'width': 1920, 'height': 1080},
         locale='ko-KR',
         timezone_id='Asia/Seoul',
     )
