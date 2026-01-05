@@ -89,6 +89,23 @@ def export_to_notebooklm(
         except Exception as e:
             print(f"⚠️  파일 로드 실패 ({json_file.name}): {e}")
     
+    # 최신순 정렬 (document_srl 기준 내림차순)
+    import re
+    def get_post_id(post):
+        url = post.get('url', '')
+        # document_srl=12345... 패턴 찾기
+        match = re.search(r'document_srl=(\d+)', url)
+        if match:
+            return int(match.group(1))
+        # /12345678 패턴 (단축 URL)
+        match = re.search(r'/(\d{7,})', url)
+        if match:
+            return int(match.group(1))
+        return 0
+
+    posts.sort(key=get_post_id, reverse=True)
+    print("✅ 게시물 최신순 정렬 완료")
+    
     saved_files = []
     
     if combine:

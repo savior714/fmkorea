@@ -72,7 +72,10 @@ async def collect_posts_by_member(
     except Exception as e:
         print(f"❌ 에러 발생: {e}")
     finally:
-        await browser.close()
+        try:
+            await browser.close()
+        except:
+            pass
     
     return post_urls
 
@@ -149,7 +152,10 @@ async def collect_posts(
     except Exception as e:
         print(f"❌ 전체 에러: {e}")
     finally:
-        await browser.close()
+        try:
+            await browser.close()
+        except:
+            pass
     
     return saved_files
 

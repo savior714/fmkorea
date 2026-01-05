@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export default function Home() {
     const [inputMode, setInputMode] = useState<"member" | "urls">("member");
@@ -11,29 +11,107 @@ export default function Home() {
     const [progress, setProgress] = useState(0);
     const [status, setStatus] = useState("");
     const [results, setResults] = useState<any>(null);
+    const [isTauriMode, setIsTauriMode] = useState(false);
+
+    // 리스너 관리용 Ref
+    const unlistenLogRef = useRef<(() => void) | null>(null);
+    const unlistenCompleteRef = useRef<(() => void) | null>(null);
+
+    // 컴포넌트 언마운트 시 리스너 정리
+    useEffect(() => {
+        return () => {
+            if (unlistenLogRef.current) unlistenLogRef.current();
+            if (unlistenCompleteRef.current) unlistenCompleteRef.current();
+        };
+    }, []);
+
+    useEffect(() => {
+        // Tauri 환경 감지
+        if (typeof window !== 'undefined' && '__TAURI__' in window) {
+            setIsTauriMode(true);
+        }
+    }, []);
 
     const handleStart = async () => {
+        if (isRunning) return;
+
+        // 기존 리스너 정리
+        if (unlistenLogRef.current) {
+            unlistenLogRef.current();
+            unlistenLogRef.current = null;
+        }
+        if (unlistenCompleteRef.current) {
+            unlistenCompleteRef.current();
+            unlistenCompleteRef.current = null;
+        }
+
         setIsRunning(true);
         setProgress(0);
-        setStatus("스크래핑 시작...");
+        setStatus("스크래핑 준비 중...");
+        setResults(null);
 
         try {
-            // TODO: Tauri 커맨드 호출
-            // const result = await invoke("start_scraping", { ... });
+            if (isTauriMode) {
+                const { invoke } = await import('@tauri-apps/api/core');
+                const { listen } = await import('@tauri-apps/api/event');
 
-            // 임시 시뮬레이션
-            for (let i = 0; i <= 100; i += 10) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-                setProgress(i);
-                setStatus(`진행 중... ${i}%`);
+                // 로그 리스너
+                unlistenLogRef.current = await listen<string>('scraping-log', (event) => {
+                    const line = event.payload;
+                    try {
+                        const json = JSON.parse(line);
+                        if (json.progress !== undefined) {
+                            setProgress(json.progress);
+                            setStatus(json.status || "처리 중...");
+                        }
+                        if (json.saved_files) {
+                            setResults(json);
+                        }
+                    } catch (e) {
+                        // console.log("Text log:", line);
+                    }
+                });
+
+                // 완료 리스너
+                unlistenCompleteRef.current = await listen('scraping-complete', () => {
+                    setProgress(100);
+                    setStatus("완료!");
+                    setIsRunning(false);
+                });
+
+                const mode = inputMode;
+                const data = inputMode === "member" ? memberId : JSON.stringify(urls.split('\n').filter(u => u.trim()));
+
+                setStatus("스크래퍼 실행...");
+
+                await invoke("start_scraping", {
+                    mode,
+                    data,
+                    maxPages: inputMode === "member" ? maxPages : undefined
+                });
+
+            } else {
+                // 웹 환경: 시뮬레이션
+                setStatus("⚠️ Tauri 데스크톱 앱에서만 사용 가능합니다");
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                setIsRunning(false);
             }
-
-            setStatus("완료!");
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            setStatus("에러 발생: " + error);
-        } finally {
+            setStatus("❌ 에러 발생: " + error.toString());
             setIsRunning(false);
+        }
+    };
+
+    const openFile = async (path: string) => {
+        try {
+            if (isTauriMode) {
+                const { invoke } = await import('@tauri-apps/api/core');
+                await invoke('open_explorer', { path });
+            }
+        } catch (e) {
+            console.error(e);
+            alert("파일을 여는데 실패했습니다: " + e);
         }
     };
 
@@ -57,8 +135,8 @@ export default function Home() {
                         <button
                             onClick={() => setInputMode("member")}
                             className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${inputMode === "member"
-                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/50"
-                                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/50"
+                                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                 }`}
                         >
                             회원번호로 검색
@@ -66,8 +144,8 @@ export default function Home() {
                         <button
                             onClick={() => setInputMode("urls")}
                             className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${inputMode === "urls"
-                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-500/50"
-                                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/50"
+                                : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                                 }`}
                         >
                             직접 URL 입력
@@ -123,8 +201,8 @@ export default function Home() {
                         onClick={handleStart}
                         disabled={isRunning}
                         className={`w-full mt-6 py-4 rounded-lg font-bold text-lg transition-all ${isRunning
-                                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                                : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500 shadow-lg shadow-blue-500/50"
+                            ? "bg-gray-600 text-gray-400 cursor-not-allowed"
+                            : "bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-500 hover:to-purple-500 shadow-lg shadow-blue-500/50"
                             }`}
                     >
                         {isRunning ? "실행 중..." : "🚀 분석 시작"}
@@ -148,11 +226,56 @@ export default function Home() {
 
                     {/* Results */}
                     {results && (
-                        <div className="mt-6 p-4 bg-gray-700/50 rounded-lg">
-                            <h3 className="text-lg font-bold text-white mb-2">분석 결과</h3>
-                            <pre className="text-sm text-gray-300 overflow-auto">
-                                {JSON.stringify(results, null, 2)}
-                            </pre>
+                        <div className="mt-6 p-6 bg-gradient-to-br from-green-900/40 to-emerald-900/40 rounded-2xl border border-green-700/30 backdrop-blur-md shadow-xl">
+                            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                ✅ 분석 완료!
+                            </h3>
+
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center text-gray-300 bg-gray-800/50 p-3 rounded-lg">
+                                    <span>수집된 게시물</span>
+                                    <span className="font-mono font-bold text-white text-lg">{results.total_files || 0}개</span>
+                                </div>
+
+                                {results.notebooklm_files && results.notebooklm_files.length > 0 && (
+                                    <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                                        <p className="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">NotebookLM용 Markdown</p>
+                                        <div className="space-y-2">
+                                            {results.notebooklm_files.map((file: string, idx: number) => (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => openFile(file)}
+                                                    className="w-full text-left flex items-center gap-3 text-green-400 hover:text-green-300 hover:bg-green-900/20 p-3 rounded-lg transition-all border border-transparent hover:border-green-800/50 group"
+                                                >
+                                                    <span className="text-2xl">📝</span>
+                                                    <span className="flex-1 font-mono text-sm break-all truncate">{file.split('\\').pop()?.split('/').pop()}</span>
+                                                    <span className="text-xs text-gray-500 group-hover:text-green-400 transition-colors">열기 ↗</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {results.guide_file && (
+                                    <button
+                                        onClick={() => openFile(results.guide_file)}
+                                        className="w-full text-left flex items-center gap-3 text-blue-400 hover:text-blue-300 bg-gray-800/50 hover:bg-blue-900/20 p-3 rounded-lg transition-all border border-gray-700 hover:border-blue-800/50 group"
+                                    >
+                                        <span className="text-2xl">📖</span>
+                                        <span className="flex-1 font-mono text-sm">분석_가이드.md</span>
+                                        <span className="text-xs text-gray-500 group-hover:text-blue-400 transition-colors">열기 ↗</span>
+                                    </button>
+                                )}
+
+                                <div className="pt-2">
+                                    <button
+                                        onClick={() => openFile(results.output_dir)}
+                                        className="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors border border-gray-600 hover:border-gray-500 flex items-center justify-center gap-2"
+                                    >
+                                        📂 데이터 폴더 열기
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
