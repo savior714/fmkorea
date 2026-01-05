@@ -71,6 +71,11 @@ def export_to_notebooklm(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     
+    # 디버그: 경로 확인
+    print(f"🔍 [DEBUG] data_dir: {data_path.absolute()}")
+    print(f"🔍 [DEBUG] output_dir: {output_path.absolute()}")
+    print(f"🔍 [DEBUG] output_dir exists: {output_path.exists()}")
+    
     # JSON 파일 로드
     json_files = sorted(data_path.glob("post_*.json"))
     
@@ -128,6 +133,8 @@ def export_to_notebooklm(
         
         saved_files.append(str(output_file))
         print(f"✅ 통합 파일 생성: {output_file.name}")
+        print(f"🔍 [DEBUG] 파일 절대 경로: {output_file.absolute()}")
+        print(f"🔍 [DEBUG] 파일 존재 확인: {output_file.exists()}")
         print(f"📊 총 {len(posts)}개 게시물 포함")
         
     else:

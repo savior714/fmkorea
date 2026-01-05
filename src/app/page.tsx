@@ -26,10 +26,19 @@ export default function Home() {
     }, []);
 
     useEffect(() => {
-        // Tauri 환경 감지
-        if (typeof window !== 'undefined' && '__TAURI__' in window) {
-            setIsTauriMode(true);
-        }
+        // Tauri 환경 감지 - API import로 직접 확인
+        const checkTauri = async () => {
+            try {
+                const { invoke } = await import('@tauri-apps/api/core');
+                console.log('✅ Tauri mode detected - API imported successfully');
+                console.log('✅ invoke function:', typeof invoke);
+                setIsTauriMode(true);
+            } catch (e) {
+                console.log('❌ Not in Tauri mode - API import failed:', e);
+                setIsTauriMode(false);
+            }
+        };
+        checkTauri();
     }, []);
 
     const handleStart = async () => {
@@ -51,13 +60,17 @@ export default function Home() {
         setResults(null);
 
         try {
+            console.log('🔍 isTauriMode:', isTauriMode);
             if (isTauriMode) {
+                console.log('📞 Importing Tauri APIs...');
                 const { invoke } = await import('@tauri-apps/api/core');
                 const { listen } = await import('@tauri-apps/api/event');
 
                 // 로그 리스너
+                console.log('👂 Setting up event listeners...');
                 unlistenLogRef.current = await listen<string>('scraping-log', (event) => {
                     const line = event.payload;
+                    console.log('📨 Received log:', line);
                     try {
                         const json = JSON.parse(line);
                         if (json.progress !== undefined) {
@@ -68,12 +81,13 @@ export default function Home() {
                             setResults(json);
                         }
                     } catch (e) {
-                        // console.log("Text log:", line);
+                        console.log("Text log:", line);
                     }
                 });
 
                 // 완료 리스너
                 unlistenCompleteRef.current = await listen('scraping-complete', () => {
+                    console.log('✅ Scraping complete event received');
                     setProgress(100);
                     setStatus("완료!");
                     setIsRunning(false);
@@ -82,6 +96,7 @@ export default function Home() {
                 const mode = inputMode;
                 const data = inputMode === "member" ? memberId : JSON.stringify(urls.split('\n').filter(u => u.trim()));
 
+                console.log('🚀 Invoking start_scraping with:', { mode, data, maxPages: inputMode === "member" ? maxPages : undefined });
                 setStatus("스크래퍼 실행...");
 
                 await invoke("start_scraping", {
@@ -89,6 +104,7 @@ export default function Home() {
                     data,
                     maxPages: inputMode === "member" ? maxPages : undefined
                 });
+                console.log('✅ start_scraping invoked successfully');
 
             } else {
                 // 웹 환경: 시뮬레이션
@@ -266,15 +282,6 @@ export default function Home() {
                                         <span className="text-xs text-gray-500 group-hover:text-blue-400 transition-colors">열기 ↗</span>
                                     </button>
                                 )}
-
-                                <div className="pt-2">
-                                    <button
-                                        onClick={() => openFile(results.output_dir)}
-                                        className="w-full py-3 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors border border-gray-600 hover:border-gray-500 flex items-center justify-center gap-2"
-                                    >
-                                        📂 데이터 폴더 열기
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     )}

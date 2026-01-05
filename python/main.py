@@ -13,6 +13,11 @@ from scraper import collect_posts_by_member, collect_posts
 async def main():
     """메인 실행 함수"""
     
+    # 디버그: 스크립트 시작 확인
+    import os
+    print(json.dumps({"debug": "Python script started", "cwd": os.getcwd(), "args": sys.argv}, ensure_ascii=False))
+    sys.stdout.flush()
+    
     # 커맨드 라인 인자 파싱
     if len(sys.argv) < 3:
         print(json.dumps({"error": "사용법: python main.py <mode> <data>"}))
@@ -90,6 +95,10 @@ async def main():
 
     # 변환 단계 (에러가 발생했더라도 수집된 파일이 있으면 시도)
     try:
+        # 디버그: 변환 단계 시작
+        print(json.dumps({"debug": "Starting conversion phase", "output_dir": str(output_dir)}, ensure_ascii=False))
+        sys.stdout.flush()
+        
         # NotebookLM 형식으로 자동 변환
         print(json.dumps({"status": "NotebookLM 형식으로 변환 중...", "progress": 95}, ensure_ascii=False))
         sys.stdout.flush()
@@ -111,7 +120,7 @@ async def main():
             "progress": 100,
             "saved_files": saved_files if saved_files else notebooklm_files, # UI 표시용
             "total_files": len(saved_files),
-            "output_dir": str(output_dir.absolute()),
+            "output_dir": str((output_dir.parent / "notebooklm").absolute()),  # notebooklm 폴더로 변경
             "notebooklm_files": notebooklm_files,
             "guide_file": guide_file
         }
