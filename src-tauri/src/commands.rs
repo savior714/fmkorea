@@ -16,24 +16,33 @@ pub async fn start_scraping(
     println!("🔍 [RUST] start_scraping called with mode={}, data={}, max_pages={:?}", mode, data, max_pages);
     let _ = app_handle.emit("scraping-log", format!("🔍 [RUST] start_scraping called with mode={}, data={}", mode, data));
     
-    // 현재 디렉토리 가져오기
-    let app_dir = app_handle
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
-    
-    // 프로젝트 루트 경로 (개발 환경용 하드코딩, 실제 배포 시 resource_dir로 변경 필요)
-    let project_root = PathBuf::from(r"C:\Users\savio\OneDrive\바탕 화면\develop\fmkorea");
-    
-    // Python 실행 파일 경로 (절대 경로로 변경)
-    let python_path = if cfg!(target_os = "windows") {
-        project_root.join(".venv").join("Scripts").join("python.exe")
+    // 리소스 디렉토리 가져오기 (프로덕션) 또는 개발 경로 사용
+    let (python_path, script_path, project_root) = if cfg!(debug_assertions) {
+        // 개발 모드: 로컬 .venv 사용
+        let project_root = PathBuf::from(r"C:\Users\savio\OneDrive\바탕 화면\develop\fmkorea");
+        let python_path = if cfg!(target_os = "windows") {
+            project_root.join(".venv").join("Scripts").join("python.exe")
+        } else {
+            project_root.join(".venv").join("bin").join("python")
+        };
+        let script_path = project_root.join("python").join("main.py");
+        (python_path, script_path, project_root)
     } else {
-        project_root.join(".venv").join("bin").join("python")
+        // 프로덕션 모드: 번들된 리소스 사용
+        let resource_dir = app_handle
+            .path()
+            .resource_dir()
+            .map_err(|e| e.to_string())?;
+        
+        let python_path = if cfg!(target_os = "windows") {
+            resource_dir.join("python-embed").join("python.exe")
+        } else {
+            resource_dir.join("python-embed").join("python")
+        };
+        let script_path = resource_dir.join("python").join("main.py");
+        let project_root = resource_dir.clone();
+        (python_path, script_path, project_root)
     };
-    
-    // Python 스크립트 경로 (절대 경로)
-    let script_path = project_root.join("python").join("main.py");
     
     // 인자 구성
     let mut args = vec![
@@ -49,8 +58,6 @@ pub async fn start_scraping(
     
     // 비동기 스레드에서 실행
     let app_handle_clone = app_handle.clone();
-    // 프로젝트 루트 경로 (개발 환경용 하드코딩, 실제 배포 시 resource_dir로 변경 필요)
-    let project_root = PathBuf::from(r"C:\Users\savio\OneDrive\바탕 화면\develop\fmkorea");
 
     std::thread::spawn(move || {
         let mut child = match Command::new(&python_path)
